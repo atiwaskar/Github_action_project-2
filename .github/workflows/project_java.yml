@@ -1,17 +1,24 @@
-name: Java CI with Email Alert
+name: Java CI with Email Alert & Auto PR
 
 on:
   push:
-  pull_request:
+    branches:
+      - feature/**
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
+      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Setup Java
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -23,7 +30,7 @@ jobs:
         id: tests
         run: mvn test
 
-      # Send Email ONLY if tests fail
+      # Send Email ONLY if tests FAIL
       - name: Send Email on Test Failure
         if: failure() && steps.tests.outcome == 'failure'
         uses: dawidd6/action-send-mail@v3
@@ -43,3 +50,17 @@ jobs:
             Triggered  : ${{ github.actor }}
             Workflow   : ${{ github.workflow }}
             Run URL    : https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      # Create PR ONLY if tests PASS
+      - name: Create Pull Request
+        if: success()
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: "Auto PR: Tests Passed ✅"
+          body: |
+            ✅ All Java unit tests passed.
+
+            This PR was automatically created by GitHub Actions.
+          base: main
+          branch: ${{ github.ref_name }}
+          commit-message: "Auto PR after successful tests"
