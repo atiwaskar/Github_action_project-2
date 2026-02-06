@@ -1,9 +1,10 @@
-name: Java CI + SonarQube + Auto PR
+name: Java CI + SonarCloud + Auto PR
 
 on:
   push:
     branches:
       - feature
+      - feature/**
 
 permissions:
   contents: write
@@ -30,26 +31,17 @@ jobs:
         id: tests
         run: mvn clean verify
 
-      # SonarQube Scan
-      - name: SonarQube Scan
-        if: success()
-        uses: SonarSource/sonarqube-scan-action@v2
+      # SonarCloud Scan (FAILS pipeline if quality gate fails)
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ secrets.SONAR_ORG }}
 
-      # SonarQube Quality Gate (BLOCK PR if fail)
-      - name: SonarQube Quality Gate
-        if: success()
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      # Email if tests fail
+      # 📧 Email ONLY if tests fail
       - name: Send Email on Test Failure
         if: failure() && steps.tests.outcome == 'failure'
         uses: dawidd6/action-send-mail@v3
@@ -58,15 +50,20 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: ❌ Java Tests Failed - ${{ github.repository }}
           to: ${{ secrets.ALERT_EMAIL_TO }}
           from: ${{ secrets.ALERT_EMAIL_FROM }}
+          subject: ❌ Java Tests Failed - ${{ github.repository }}
           body: |
             ❌ Java unit tests failed.
-            Repo: ${{ github.repository }}
-            Branch: ${{ github.ref_name }}
 
-      # Auto PR ONLY if everything PASSES
+            Repo   : ${{ github.repository }}
+            Branch : ${{ github.ref_name }}
+            Actor  : ${{ github.actor }}
+
+            Run URL:
+            https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      # 🚀 Auto PR ONLY if everything PASSES
       - name: Create Pull Request
         if: success()
         uses: peter-evans/create-pull-request@v6
@@ -74,6 +71,9 @@ jobs:
           title: "Auto PR: CI + Sonar Passed ✅"
           body: |
             ✅ Tests passed
-            ✅ SonarQube quality gate passed
+            ✅ SonarCloud quality gate passed
+
+            PR created automatically.
           base: main
           branch: ${{ github.ref_name }}
+          commit-message: "Auto PR after CI + Sonar success"
